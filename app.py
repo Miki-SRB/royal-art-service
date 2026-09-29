@@ -244,8 +244,8 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, heure_dec
     y -= (h + 25)
     
     if photos_bytes_list:
-        max_w = 230
-        max_h = 140
+        max_w = 150
+        max_h = 100
         
         if y - max_h < 50:
             c.showPage()
@@ -257,7 +257,11 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, heure_dec
         c.drawString(50, y, f"• Photos jointes / Attached photos ({nb_photos_count}) :")
         y -= 18
         
-        col_x = 50
+        col_indices = [50, 215, 380]
+        col_idx = 0
+        ligne_y = y
+        max_ligne_h = 0
+        
         for raw_bytes in photos_bytes_list:
             try:
                 img_io = io.BytesIO(raw_bytes)
@@ -278,22 +282,23 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, heure_dec
                 pil_img.convert('RGB').save(buf, format='JPEG', quality=95)
                 buf.seek(0)
                 
-                if y - max_h < 40:
+                if ligne_y - draw_h < 40:
                     c.showPage()
-                    y = 730
-                    col_x = 50
+                    ligne_y = 730
+                    col_idx = 0
                     dessiner_cadre_et_logo(c, logo_clean_buf)
                 
-                pos_x_centree = col_x + (max_w - draw_w) / 2
-                pos_y_centree = (y - max_h) + (max_h - draw_h) / 2
+                col_x = col_indices[col_idx]
+                c.drawImage(ImageReader(buf), col_x, ligne_y - draw_h, width=draw_w, height=draw_h, preserveAspectRatio=True)
                 
-                c.drawImage(ImageReader(buf), pos_x_centree, pos_y_centree, width=draw_w, height=draw_h, preserveAspectRatio=True)
+                if draw_h > max_ligne_h:
+                    max_ligne_h = draw_h
                 
-                if col_x == 50:
-                    col_x = 295
-                else:
-                    col_x = 50
-                    y -= (max_h + 15)
+                col_idx += 1
+                if col_idx > 2:
+                    col_idx = 0
+                    ligne_y -= (max_ligne_h + 15)
+                    max_ligne_h = 0
             except Exception:
                 pass
 
@@ -510,6 +515,7 @@ if submit:
 
             except Exception as e:
                 st.error(f"Erreur lors de la génération du PDF ou de l'envoi Drive : {e}")
+
 
 
 
