@@ -1,4 +1,3 @@
-
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -352,26 +351,21 @@ with col_vol2:
 
 lta = st.text_input("LTA / AWB", placeholder="ex: 006-12345678", key="lta_input")
 
-# --- GESTION DES PHOTOS ---
+# --- GESTION DES PHOTOS MULTIPLES (OPTIMISÉ MOBILE / ANDROID) ---
 st.write("### Photos de Supervision / Supervision Photos")
 photos_bytes_list = []
 
 uploaded_photos = st.file_uploader(
-    "1. Sélectionner depuis la galerie / Select from gallery (plusieurs fichiers possibles)", 
+    "📸 Prendre ou sélectionner plusieurs photos / Take or select multiple photos", 
     type=["png", "jpg", "jpeg"], 
     accept_multiple_files=True, 
-    key="photos_input"
+    key="photos_input",
+    help="Sur Android, ce bouton vous permet de choisir l'appareil photo pour prendre plusieurs clichés successivement ou de sélectionner des images dans votre galerie."
 )
+
 if uploaded_photos:
     for img in uploaded_photos:
         photos_bytes_list.append(img.getvalue())
-
-camera_photo = st.camera_input(
-    "2. Ou prendre une photo directement / Or take a picture directly (Idéal Android)", 
-    key="camera_input"
-)
-if camera_photo:
-    photos_bytes_list.append(camera_photo.getvalue())
 
 if photos_bytes_list:
     st.success(f"📸 {len(photos_bytes_list)} photo(s) prête(s) à être intégrée(s) au rapport.")
@@ -391,7 +385,6 @@ with st.form("form_rapport"):
         convoyeur = st.text_input("Convoyeur / Courier", placeholder="ex: Sylvie Bourrat")
         
     with col2:
-        # Conservation uniquement de l'heure de décollage réel avec valeur par défaut neutre
         heure_decollage = st.time_input("Heure de décollage / Wheels up", value=time(12, 0), key="dec_fixe")
 
     st.write("---")
@@ -517,6 +510,7 @@ if submit:
 
             except Exception as e:
                 st.error(f"Erreur lors de la génération du PDF ou de l'envoi Drive : {e}")
+
 
 
 
