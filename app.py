@@ -1,10 +1,13 @@
 
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, time
 import os
 import io
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageOps
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -50,7 +53,7 @@ if not os.path.exists(EXCEL_FILE):
     df_init = pd.DataFrame(columns=[
         "ID_Rapport", "Date_Saisie", "Superviseur", "Date_Operation", 
         "Vol_Ref", "Convoyeur", "LTA", "Palettes_Detail", "Siege_Cabine", 
-        "ETD", "Heure_Decollage", "Retard", "Commentaires", "Nb_Photos"
+        "Heure_Decollage", "Commentaires", "Nb_Photos"
     ])
     df_init.to_excel(EXCEL_FILE, index=False)
 
@@ -73,6 +76,7 @@ def preparer_logo_pdf(logo_path):
     """Prépare le logo sur fond blanc pour éviter la transparence excessive"""
     try:
         pil_logo = PILImage.open(logo_path)
+        pil_logo = ImageOps.exif_transpose(pil_logo)
         if pil_logo.mode in ('RGBA', 'LA') or (pil_logo.mode == 'P' and 'transparency' in pil_logo.info):
             bg = PILImage.new("RGB", pil_logo.size, (255, 255, 255))
             bg.paste(pil_logo, (0, 0), pil_logo)
@@ -112,7 +116,7 @@ def obtenir_prochain_id():
     nb_rapports = len(df) + 1
     return f"RAS-{annee}-{nb_rapports:03d}"
 
-def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, etd_dec, heure_dec, retard_txt, palettes_list, siege_cabine, comm, photos_bytes_list):
+def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, heure_dec, palettes_list, siege_cabine, comm, photos_bytes_list):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     
@@ -122,7 +126,6 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, etd_dec, 
     logo_path = chercher_logo()
     logo_clean_buf = preparer_logo_pdf(logo_path) if logo_path else None
     
-    # Application sur la première page
     dessiner_cadre_et_logo(c, logo_clean_buf)
 
     c.setFont("Helvetica-Bold", 14)
@@ -145,32 +148,28 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, etd_dec, 
     c.setFillColor(couleur_noire)
     c.line(50, 700, 550, 700)
     
-    y = 675  # Position de départ plus basse pour aérer
+    y = 675
     nb_photos_count = len(photos_bytes_list) if photos_bytes_list else 0
     
-    # Date
     c.setFont("Helvetica-Bold", 10)
     c.setFillColor(couleur_noire)
     c.drawString(50, y, "• Date d'opération / Date of operation : ")
     c.setFillColor(couleur_rouge)
     c.drawString(250, y, f"{date_op}")
-    y -= 22  # Espacement augmenté
+    y -= 22
     
-    # Vol
     c.setFillColor(couleur_noire)
     c.drawString(50, y, "• Numéro de vol / Flight N° / Ref : ")
     c.setFillColor(couleur_rouge)
     c.drawString(215, y, f"{vol}")
     y -= 22
     
-    # Convoyeur
     c.setFillColor(couleur_noire)
     c.drawString(50, y, "• Convoyeur / Courier : ")
     c.setFillColor(couleur_rouge)
     c.drawString(165, y, f"{convoyeur if convoyeur else 'N/A'}")
     y -= 22
     
-    # LTA
     lta_final = lta.strip() if lta and lta.strip() else ""
     if not lta_final and vol:
         code_comp = vol.strip()[:2].upper()
@@ -183,7 +182,6 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, etd_dec, 
     c.drawString(120, y, f"{lta_final if lta_final else 'N/A'}")
     y -= 22
 
-    # Palettes
     c.setFillColor(couleur_noire)
     c.drawString(50, y, "• Détails et Positions des Palettes / Pallets & Positions :")
     y -= 18
@@ -225,13 +223,9 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, etd_dec, 
     c.setFillColor(couleur_noire)
     c.drawString(50, y, "• Heure de décollage / Wheels up : ")
     c.setFillColor(couleur_rouge)
-    txt_dec_final = f"{heure_dec}"
-    if retard_txt and retard_txt != "0 min":
-        txt_dec_final += f" (Retard / Delay : {retard_txt})"
-    c.drawString(225, y, txt_dec_final)
+    c.drawString(225, y, f"{heure_dec}")
     y -= 24
     
-    # Remarques
     c.setFillColor(couleur_noire)
     c.drawString(50, y, "• Remarques / Compte-rendu / Remarks & Report :")
     y -= 16
@@ -250,7 +244,6 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, etd_dec, 
     p.drawOn(c, 50, y - h)
     y -= (h + 25)
     
-    # --- DESSIN DES PHOTOS ---
     if photos_bytes_list:
         max_w = 230
         max_h = 140
@@ -266,14 +259,24 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, etd_dec, 
         y -= 18
         
         col_x = 50
-        
         for raw_bytes in photos_bytes_list:
             try:
                 img_io = io.BytesIO(raw_bytes)
                 pil_img = PILImage.open(img_io)
+                pil_img = ImageOps.exif_transpose(pil_img)
+                
+                orig_w, orig_h = pil_img.size
+                aspect = orig_w / orig_h
+                
+                if aspect > (max_w / max_h):
+                    draw_w = max_w
+                    draw_h = max_w / aspect
+                else:
+                    draw_h = max_h
+                    draw_w = max_h * aspect
                 
                 buf = io.BytesIO()
-                pil_img.convert('RGB').save(buf, format='JPEG')
+                pil_img.convert('RGB').save(buf, format='JPEG', quality=95)
                 buf.seek(0)
                 
                 if y - max_h < 40:
@@ -282,7 +285,10 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, etd_dec, 
                     col_x = 50
                     dessiner_cadre_et_logo(c, logo_clean_buf)
                 
-                c.drawImage(ImageReader(buf), col_x, y - max_h, width=max_w, height=max_h, preserveAspectRatio=True)
+                pos_x_centree = col_x + (max_w - draw_w) / 2
+                pos_y_centree = (y - max_h) + (max_h - draw_h) / 2
+                
+                c.drawImage(ImageReader(buf), pos_x_centree, pos_y_centree, width=draw_w, height=draw_h, preserveAspectRatio=True)
                 
                 if col_x == 50:
                     col_x = 295
@@ -301,6 +307,8 @@ st.set_page_config(page_title="Royal Art Service - Operation report", page_icon=
 
 logo_trouve = chercher_logo()
 
+st.markdown("<br><br>", unsafe_allow_html=True)
+
 if logo_trouve:
     col_t1, col_t2 = st.columns([2, 3])
     with col_t1:
@@ -317,11 +325,9 @@ st.write("---")
 col_top1, col_top2 = st.columns([1, 2])
 with col_top1:
     collaborateur = st.selectbox("Superviseur / Supervisor", ["Miki", "Guillaume", "Simeone", "Sacha", "Perrine", "Quentin"])
-
 with col_top2:
     pass
 
-# --- GESTION INSTANTANÉE DU PRÉFIXE LTA SELON LE NUMÉRO DE VOL ---
 if "vol_input" not in st.session_state:
     st.session_state["vol_input"] = ""
 if "lta_input" not in st.session_state:
@@ -346,10 +352,30 @@ with col_vol2:
 
 lta = st.text_input("LTA / AWB", placeholder="ex: 006-12345678", key="lta_input")
 
+# --- GESTION DES PHOTOS ---
 st.write("### Photos de Supervision / Supervision Photos")
-uploaded_photos = st.file_uploader("Ajouter des photos / Upload photos (tarmac, état des caisses, arrimage...)", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key="photos_input")
+photos_bytes_list = []
 
-# --- SELECTEUR DE PALETTES EN DEHORS DU FORMULAIRE ---
+uploaded_photos = st.file_uploader(
+    "1. Sélectionner depuis la galerie / Select from gallery (plusieurs fichiers possibles)", 
+    type=["png", "jpg", "jpeg"], 
+    accept_multiple_files=True, 
+    key="photos_input"
+)
+if uploaded_photos:
+    for img in uploaded_photos:
+        photos_bytes_list.append(img.getvalue())
+
+camera_photo = st.camera_input(
+    "2. Ou prendre une photo directement / Or take a picture directly (Idéal Android)", 
+    key="camera_input"
+)
+if camera_photo:
+    photos_bytes_list.append(camera_photo.getvalue())
+
+if photos_bytes_list:
+    st.success(f"📸 {len(photos_bytes_list)} photo(s) prête(s) à être intégrée(s) au rapport.")
+
 st.write("---")
 col_s5_1, col_s5_2 = st.columns([3, 1])
 with col_s5_1:
@@ -365,23 +391,8 @@ with st.form("form_rapport"):
         convoyeur = st.text_input("Convoyeur / Courier", placeholder="ex: Sylvie Bourrat")
         
     with col2:
-        etd_deplacement = st.time_input("ETD (Heure prévue) / Scheduled Departure", value=datetime.now().time())
-        heure_decollage = st.time_input("Heure de décollage (Réelle) / Wheels up", value=datetime.now().time())
-
-    # --- CALCUL ET AFFICHAGE EN DIRECT DU RETARD DANS LE FORMULAIRE ---
-    t1_form = datetime.strptime(etd_deplacement.strftime("%H:%M"), "%H:%M")
-    t2_form = datetime.strptime(heure_decollage.strftime("%H:%M"), "%H:%M")
-    diff_min_form = int((t2_form - t1_form).total_seconds() / 60)
-    if diff_min_form < 0:
-        diff_min_form = 0
-    if diff_min_form > 0:
-        h_f = diff_min_form // 60
-        m_f = diff_min_form % 60
-        retard_form_txt = f"+{h_f}h{m_f:02d}" if h_f > 0 and m_f > 0 else (f"+{h_f}h" if h_f > 0 else f"+{diff_min_form} min")
-    else:
-        retard_form_txt = "0 min (À l'heure / On time)"
-        
-    st.markdown(f"⏱️ **Retard calculé en direct :** :red[**{retard_form_txt}**]")
+        # Conservation uniquement de l'heure de décollage réel avec valeur par défaut neutre
+        heure_decollage = st.time_input("Heure de décollage / Wheels up", value=time(12, 0), key="dec_fixe")
 
     st.write("---")
     
@@ -428,37 +439,16 @@ if submit:
         else:
             id_rapport = obtenir_prochain_id()
             
-            photos_bytes_list = []
-            if uploaded_photos:
+            if photos_bytes_list:
                 folder_photos = os.path.join(BASE_DIR, f"photos_{id_rapport}")
                 os.makedirs(folder_photos, exist_ok=True)
-                for img in uploaded_photos:
-                    b_data = img.getvalue()
-                    photos_bytes_list.append(b_data)
-                    with open(os.path.join(folder_photos, img.name), "wb") as f:
+                for idx, b_data in enumerate(photos_bytes_list):
+                    with open(os.path.join(folder_photos, f"photo_{idx+1}.jpg"), "wb") as f:
                         f.write(b_data)
 
             palettes_txt = " | ".join([f"Palette {p['num_palette']} (Pos: {p['position'] if p['position'] else 'N/A'}): {p['nb_caisses']} caisse(s)" for p in palettes_data])
             date_op_fr = date_op.strftime("%d/%m/%Y")
-            etd_txt = etd_deplacement.strftime("%H:%M")
             heure_dec_txt = heure_decollage.strftime("%H:%M")
-            
-            # Calcul automatique du retard pour l'enregistrement et le PDF
-            t1 = datetime.strptime(etd_txt, "%H:%M")
-            t2 = datetime.strptime(heure_dec_txt, "%H:%M")
-            diff_minutes = int((t2 - t1).total_seconds() / 60)
-            if diff_minutes < 0:
-                diff_minutes = 0
-            
-            if diff_minutes > 0:
-                heures = diff_minutes // 60
-                minutes = diff_minutes % 60
-                if heures > 0:
-                    retard_txt = f"+{heures}h{minutes:02d}" if minutes > 0 else f"+{heures}h"
-                else:
-                    retard_txt = f"+{diff_minutes} min"
-            else:
-                retard_txt = "0 min"
 
             nb_photos_count = len(photos_bytes_list)
 
@@ -477,9 +467,7 @@ if submit:
                 "LTA": lta_valeur,
                 "Palettes_Detail": palettes_txt,
                 "Siege_Cabine": siege_cabine if siege_cabine else "N/A",
-                "ETD": etd_txt,
                 "Heure_Decollage": heure_dec_txt,
-                "Retard": retard_txt,
                 "Commentaires": commentaires,
                 "Nb_Photos": nb_photos_count
             }
@@ -488,9 +476,9 @@ if submit:
             df_updated.to_excel(EXCEL_FILE, index=False)
             
             try:
-                pdf_bytes = generer_pdf_bytes(id_rapport, collaborateur, date_op_fr, vol_ref, convoyeur, lta_valeur, etd_txt, heure_dec_txt, retard_txt, palettes_data, siege_cabine, commentaires, photos_bytes_list)
+                pdf_bytes = generer_pdf_bytes(id_rapport, collaborateur, date_op_fr, vol_ref, convoyeur, lta_valeur, heure_dec_txt, palettes_data, siege_cabine, commentaires, photos_bytes_list)
                 
-                st.markdown(f"### :red[**Rapport N° {id_rapport} enregistré avec succès ! Retard calculé : {retard_txt}**]")
+                st.markdown(f"### :red[**Rapport N° {id_rapport} enregistré avec succès !**]")
                 
                 st.download_button(
                     label="📥 Télécharger le Rapport PDF / Download PDF Report",
@@ -498,8 +486,37 @@ if submit:
                     file_name=f"Rapport_{id_rapport}.pdf",
                     mime="application/pdf"
                 )
+
+                # --- ENVOI AUTOMATIQUE VERS GOOGLE DRIVE ---
+                SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+                SERVICE_ACCOUNT_FILE = "royal-art-service-a87ca3fd618c.json"
+                PARENT_FOLDER_ID = "1JBGnD-WvqaaP6-DWoCKLj2rdshWZjXdF"
+
+                temp_pdf_path = f"Rapport_{id_rapport}.pdf"
+                with open(temp_pdf_path, "wb") as f_temp:
+                    f_temp.write(pdf_bytes)
+
+                creds = service_account.Credentials.from_service_account_file(
+                    SERVICE_ACCOUNT_FILE, scopes=SCOPES
+                )
+                service = build("drive", "v3", credentials=creds)
+
+                file_metadata = {
+                    "name": f"Rapport_{id_rapport}.pdf",
+                    "parents": [PARENT_FOLDER_ID],
+                }
+                media = MediaFileUpload(
+                    temp_pdf_path, mimetype="application/pdf", resumable=True
+                )
+
+                service.files().create(
+                    body=file_metadata, media_body=media, fields="id"
+                ).execute()
+
+                st.success("📁 Rapport également transféré sur Google Drive avec succès !")
+
             except Exception as e:
-                st.error(f"Erreur lors de la génération du PDF : {e}")
+                st.error(f"Erreur lors de la génération du PDF ou de l'envoi Drive : {e}")
 
 
 
