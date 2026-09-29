@@ -18,34 +18,34 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EXCEL_FILE = os.path.join(BASE_DIR, "rapports_supervision.xlsx")
 
 PREFIXES_LTA = {
-    "AF": "057-",  # Air France
-    "KE": "180-",  # Korean Air
-    "DL": "006-",  # Delta Air Lines
-    "AA": "001-",  # American Airlines
-    "UA": "016-",  # United Airlines
-    "LH": "020-",  # Lufthansa Cargo
-    "BA": "125-",  # British Airways
-    "EK": "176-",  # Emirates
-    "QR": "157-",  # Qatar Airways
-    "SQ": "618-",  # Singapore Airlines
-    "CX": "160-",  # Cathay Pacific
-    "AY": "105-",  # Finnair
-    "TK": "235-",  # Turkish Airlines
-    "JL": "131-",  # Japan Airlines
-    "NH": "205-",  # All Nippon Airways (ANA)
-    "EY": "607-",  # Etihad Airways
-    "CI": "297-",  # China Airlines
-    "BR": "695-",  # EVA Air
-    "CZ": "784-",  # China Southern
-    "MU": "781-",  # China Eastern
-    "CA": "999-",  # Air China
-    "AC": "014-",  # Air Canada
-    "KL": "074-",  # KLM
-    "LX": "724-",  # Swiss
-    "OS": "257-",  # Austrian Airlines
-    "SN": "082-",  # Brussels Airlines
-    "TP": "047-",  # TAP Air Portugal
-    "IB": "075-",  # Iberia
+    "AF": "057-", # Air France
+    "KE": "180-", # Korean Air
+    "DL": "006-", # Delta Air Lines
+    "AA": "001-", # American Airlines
+    "UA": "016-", # United Airlines
+    "LH": "020-", # Lufthansa Cargo
+    "BA": "125-", # British Airways
+    "EK": "176-", # Emirates
+    "QR": "157-", # Qatar Airways
+    "SQ": "618-", # Singapore Airlines
+    "CX": "160-", # Cathay Pacific
+    "AY": "105-", # Finnair
+    "TK": "235-", # Turkish Airlines
+    "JL": "131-", # Japan Airlines
+    "NH": "205-", # All Nippon Airways (ANA)
+    "EY": "607-", # Etihad Airways
+    "CI": "297-", # China Airlines
+    "BR": "695-", # EVA Air
+    "CZ": "784-", # China Southern
+    "MU": "781-", # China Eastern
+    "CA": "999-", # Air China
+    "AC": "014-", # Air Canada
+    "KL": "074-", # KLM
+    "LX": "724-", # Swiss
+    "OS": "257-", # Austrian Airlines
+    "SN": "082-", # Brussels Airlines
+    "TP": "047-", # TAP Air Portugal
+    "IB": "075-", # Iberia
 }
 
 if not os.path.exists(EXCEL_FILE):
@@ -244,8 +244,8 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, heure_dec
     y -= (h + 25)
     
     if photos_bytes_list:
-        max_w = 150
-        max_h = 100
+        max_w = 160
+        max_h = 120
         
         if y - max_h < 50:
             c.showPage()
@@ -257,7 +257,7 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, heure_dec
         c.drawString(50, y, f"• Photos jointes / Attached photos ({nb_photos_count}) :")
         y -= 18
         
-        col_indices = [50, 215, 380]
+        col_indices = [50, 220, 390]
         col_idx = 0
         ligne_y = y
         max_ligne_h = 0
@@ -307,7 +307,7 @@ def generer_pdf_bytes(id_rapport, colab, date_op, vol, convoyeur, lta, heure_dec
     return buffer.getvalue()
 
 # --- INTERFACE STREAMLIT ---
-st.set_page_config(page_title="Royal Art Service - Operation report", page_icon="✈️", layout="wide")
+st.set_page_config(page_title="Royal Art Service - Operation report", page_icon="✈️️", layout="wide")
 
 logo_trouve = chercher_logo()
 
@@ -515,6 +515,7 @@ if submit:
 
             except Exception as e:
                 st.error(f"Erreur lors de la génération du PDF ou de l'envoi Drive : {e}")
+
 
 
 
